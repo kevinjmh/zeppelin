@@ -167,6 +167,8 @@ public class JDBCInterpreter extends KerberosInterpreter {
   private Map<String, Boolean> isFirstRefreshMap = new HashMap<>();
   private Map<String, Boolean> paragraphCancelMap = new HashMap<>();
 
+  private PermissionConfig permissionConfig;
+
   public JDBCInterpreter(Properties property) {
     super(property);
     jdbcUserConfigurationsMap = new HashMap<>();
@@ -748,6 +750,24 @@ public class JDBCInterpreter extends KerberosInterpreter {
     String noteId = context.getNoteId();
     String user = getUser(context);
 
+    if (null == permissionConfig) {
+      permissionConfig = new PermissionConfig(properties.getProperty("PermissionConfig",""));
+    }
+    /**
+     * Permission Check
+     */
+    if (sql.trim().equalsIgnoreCase("updatePermissionConfig")){
+      permissionConfig.updateConfig();
+      return new InterpreterResult(Code.SUCCESS,
+              "updated. #user=" + permissionConfig.controlUsers.size() + " " + permissionConfig.toString());
+    }
+    if (sql.trim().equalsIgnoreCase("getPermissionConfig")){
+      return new InterpreterResult(Code.SUCCESS, permissionConfig.toString());
+    }
+    if (permissionConfig.isBlock(user, sql)) {
+      return new InterpreterResult(Code.ERROR, "Query is not allowed.");
+    }
+
     try {
       connection = getConnection(context);
     } catch (Exception e) {
@@ -801,14 +821,14 @@ public class JDBCInterpreter extends KerberosInterpreter {
           }
 
           // start hive monitor thread if it is hive jdbc
-          String jdbcURL = getJDBCConfiguration(user).getProperty().getProperty(URL_KEY);
-          String driver =
-                  getJDBCConfiguration(user).getProperty().getProperty(DRIVER_KEY);
-          if (jdbcURL != null && jdbcURL.startsWith("jdbc:hive2://")
-                  && driver != null && driver.equals("org.apache.hive.jdbc.HiveDriver")) {
-            HiveUtils.startHiveMonitorThread(statement, context,
-                    Boolean.parseBoolean(getProperty("hive.log.display", "true")), this);
-          }
+//          String jdbcURL = getJDBCConfiguration(user).getProperty().getProperty(URL_KEY);
+//          String driver =
+//                  getJDBCConfiguration(user).getProperty().getProperty(DRIVER_KEY);
+//          if (jdbcURL != null && jdbcURL.startsWith("jdbc:hive2://")
+//                  && driver != null && driver.equals("org.apache.hive.jdbc.HiveDriver")) {
+//            HiveUtils.startHiveMonitorThread(statement, context,
+//                    Boolean.parseBoolean(getProperty("hive.log.display", "true")), this);
+//          }
           boolean isResultSetAvailable = statement.execute(sqlToExecute);
           getJDBCConfiguration(user).setConnectionInDBDriverPoolSuccessful();
           if (isResultSetAvailable) {
