@@ -42,8 +42,8 @@ public class RemoteScheduler extends AbstractScheduler {
   public RemoteScheduler(String name,
                          RemoteInterpreter remoteInterpreter) {
     super(name);
-    this.executor =
-        Executors.newSingleThreadExecutor(new SchedulerThreadFactory("FIFO-" + name + "-"));
+    this.executor = Executors.newFixedThreadPool(10, new SchedulerThreadFactory(name));
+//        Executors.newSingleThreadExecutor(new SchedulerThreadFactory("FIFO-" + name + "-"));
     this.remoteInterpreter = remoteInterpreter;
   }
 
