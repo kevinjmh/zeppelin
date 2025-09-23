@@ -40,7 +40,10 @@ import org.apache.zeppelin.util.PropertiesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.security.PrivilegedExceptionAction;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -169,12 +172,128 @@ public class JDBCInterpreter extends KerberosInterpreter {
 
   private PermissionConfig permissionConfig;
 
+  private Set<String> columnWhiteList_fullmatch = new HashSet<>();
+  private Set<String> columnBlackList_fullmatch = new HashSet<>();
+  private Set<String> columnBlackList_endmatch = new HashSet<>();
+  private Set<String> columnBlackList_startmatch = new HashSet<>();
+  private Set<String> columnBlackList_partmatch = new HashSet<>();
+
   public JDBCInterpreter(Properties property) {
     super(property);
     jdbcUserConfigurationsMap = new HashMap<>();
     basePropertiesMap = new HashMap<>();
     sqlCompletersMap = new HashMap<>();
     maxLineResults = MAX_LINE_DEFAULT;
+    updateColumnConfig();
+  }
+
+  public void updateColumnConfig() {
+    columnWhiteList_fullmatch.clear();
+    columnBlackList_fullmatch.clear();
+    columnBlackList_endmatch.clear();
+    columnBlackList_startmatch.clear();
+    columnBlackList_partmatch.clear();
+
+    // 预置敏感字段列表
+    columnWhiteList_fullmatch.add("col_name");
+    columnWhiteList_fullmatch.add("namespace");
+    columnWhiteList_fullmatch.add("tablename");
+
+    columnBlackList_fullmatch.add("userid");
+    columnBlackList_fullmatch.add("user_id");
+    columnBlackList_fullmatch.add("user_domain_id");
+    columnBlackList_fullmatch.add("msisdn");
+    columnBlackList_fullmatch.add("phone_number");
+    columnBlackList_fullmatch.add("mobile");
+    columnBlackList_fullmatch.add("servnumber");
+    columnBlackList_fullmatch.add("owner");
+    columnBlackList_fullmatch.add("author");
+    columnBlackList_fullmatch.add("msg");
+    columnBlackList_fullmatch.add("message");
+
+    columnBlackList_fullmatch.add("password");
+    columnBlackList_fullmatch.add("passwd");
+    columnBlackList_fullmatch.add("realname");
+    columnBlackList_fullmatch.add("subject");
+    columnBlackList_fullmatch.add("sha256");
+    columnBlackList_fullmatch.add("helper");
+
+    columnBlackList_endmatch.add("id");
+    columnBlackList_endmatch.add("nbr");
+    columnBlackList_endmatch.add("key");
+    columnBlackList_endmatch.add("url");
+    columnBlackList_endmatch.add("_by");
+    columnBlackList_endmatch.add("ter");
+    columnBlackList_endmatch.add("tor");
+
+    columnBlackList_partmatch.add("ip");
+    columnBlackList_partmatch.add("account");
+    columnBlackList_partmatch.add("user");
+    columnBlackList_partmatch.add("name");
+    columnBlackList_partmatch.add("code");
+    columnBlackList_partmatch.add("number");
+    columnBlackList_partmatch.add("phone");
+    columnBlackList_partmatch.add("region");
+    columnBlackList_partmatch.add("location");
+    columnBlackList_partmatch.add("country");
+    columnBlackList_partmatch.add("city");
+    columnBlackList_partmatch.add("province");
+    columnBlackList_partmatch.add("title");
+    columnBlackList_partmatch.add("text");
+    columnBlackList_partmatch.add("content");
+    columnBlackList_partmatch.add("address");
+    columnBlackList_partmatch.add("latitude");
+    columnBlackList_partmatch.add("longtitude");
+    columnBlackList_partmatch.add("lon_lat");
+    columnBlackList_partmatch.add("district");
+    columnBlackList_partmatch.add("area");
+    columnBlackList_partmatch.add("email");
+    columnBlackList_partmatch.add("device");
+    columnBlackList_partmatch.add("secret");
+    columnBlackList_partmatch.add("coop");
+    columnBlackList_partmatch.add("class");
+    columnBlackList_partmatch.add("thumbnail");
+
+    // 配置
+    String conf_path = properties.getProperty("ColumnConfig","");
+    if (conf_path.isEmpty()) {
+      return;
+    }
+    try {
+      Properties pro = new Properties();
+      BufferedReader br = new BufferedReader(new InputStreamReader(
+              new FileInputStream(conf_path)
+      ));
+      pro.load(br);
+      br.close();
+
+      if (!pro.getProperty("wfull", "").isEmpty()) {
+        columnWhiteList_fullmatch.addAll(Arrays.asList(pro.getProperty("wfull").toLowerCase().split(" ")));
+      }
+      if (!pro.getProperty("bfull", "").isEmpty()) {
+        columnBlackList_fullmatch.addAll(Arrays.asList(pro.getProperty("bfull").toLowerCase().split(" ")));
+      }
+      if (!pro.getProperty("bend", "").isEmpty()) {
+        columnBlackList_endmatch.addAll(Arrays.asList(pro.getProperty("bend").toLowerCase().split(" ")));
+      }
+      if (!pro.getProperty("bstart", "").isEmpty()) {
+        columnBlackList_startmatch.addAll(Arrays.asList(pro.getProperty("bstart").toLowerCase().split(" ")));
+      }
+      if (!pro.getProperty("bpart", "").isEmpty()) {
+        columnBlackList_partmatch.addAll(Arrays.asList(pro.getProperty("bpart").toLowerCase().split(" ")));
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+  private boolean isColumnAllowDisplay(String columnName) {
+    String col = columnName.toLowerCase().trim();
+    if (columnBlackList_fullmatch.contains(col)) return false; // 黑名单全匹配
+    if (columnWhiteList_fullmatch.contains(col)) return true; // 白名单全匹配 处理误判
+    if (columnBlackList_endmatch.stream().anyMatch(col::endsWith)) return false; // 结尾
+    if (columnBlackList_startmatch.stream().anyMatch(col::startsWith)) return false; // 开头
+    if (columnBlackList_partmatch.stream().anyMatch(col::contains)) return false; // 任意位置
+    return true;
   }
 
   @Override
@@ -662,6 +781,9 @@ public class JDBCInterpreter extends KerberosInterpreter {
       msg = new StringBuilder();
     }
 
+    // 脱敏字段列序列表
+    List<Integer> sensitiveColumnIndexList = new ArrayList<>();
+
     for (int i = 1; i < md.getColumnCount() + 1; i++) {
       if (i > 1) {
         msg.append(TAB);
@@ -672,6 +794,9 @@ public class JDBCInterpreter extends KerberosInterpreter {
       } else {
         msg.append(removeTablePrefix(replaceReservedChars(
                 TableDataUtils.normalizeColumn(md.getColumnName(i)))));
+      }
+      if (!isColumnAllowDisplay(md.getColumnName(i))) {
+        sensitiveColumnIndexList.add(i);
       }
     }
     msg.append(NEWLINE);
@@ -691,6 +816,14 @@ public class JDBCInterpreter extends KerberosInterpreter {
           resultValue = "null";
         } else {
           resultValue = resultSet.getString(i);
+        }
+        if (sensitiveColumnIndexList.contains(i)) {
+          // resultValue 前8位替换位星号，注意下标越界
+          if (resultValue.length() >= 8) {
+            resultValue = "****" + resultValue.substring(8);
+          } else {
+            resultValue = "****";
+          }
         }
         msg.append(replaceReservedChars(TableDataUtils.normalizeColumn(resultValue)));
         if (i != md.getColumnCount()) {
@@ -766,6 +899,16 @@ public class JDBCInterpreter extends KerberosInterpreter {
     }
     if (permissionConfig.isBlock(user, sql)) {
       return new InterpreterResult(Code.ERROR, "Query is not allowed.");
+    }
+    /**
+     * Column Masking
+     */
+    if (sql.trim().equals("updateColumnConfig")){
+      updateColumnConfig();
+      return new InterpreterResult(Code.SUCCESS,
+              String.format("updated. wfull=%d, bfull=%d, bend=%d, bstart=%d, bpart=%d",
+              columnWhiteList_fullmatch.size(), columnBlackList_fullmatch.size(), columnBlackList_endmatch.size(),
+              columnBlackList_startmatch.size(), columnBlackList_partmatch.size()));
     }
 
     try {
