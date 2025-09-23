@@ -108,7 +108,7 @@ public class JDBCInterpreterTest extends BasicJDBCTestCaseAdapter {
     );
 
     PreparedStatement insertStatement = connection.prepareStatement(
-            "insert into test_table(id, name) values ('a', 'a_name'),('b', 'b_name'),('c', ?);");
+            "insert into test_table(id, name) values ('a', 'a_name1234567890'),('b', 'b_name'),('c', ?);");
     insertStatement.setString(1, null);
     insertStatement.execute();
     context = InterpreterContext.builder()
@@ -199,7 +199,7 @@ public class JDBCInterpreterTest extends BasicJDBCTestCaseAdapter {
     JDBCInterpreter t = new JDBCInterpreter(properties);
     t.open();
 
-    String sqlQuery = "select * from test_table WHERE ID in ('a', 'b'); ";
+    String sqlQuery = "select name nnn from test_table; ";
 
     InterpreterResult interpreterResult = t.interpret(sqlQuery, context);
 

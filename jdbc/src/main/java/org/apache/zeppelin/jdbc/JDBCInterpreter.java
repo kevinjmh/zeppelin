@@ -198,6 +198,11 @@ public class JDBCInterpreter extends KerberosInterpreter {
     columnWhiteList_fullmatch.add("col_name");
     columnWhiteList_fullmatch.add("namespace");
     columnWhiteList_fullmatch.add("tablename");
+    columnWhiteList_fullmatch.add("statement");
+    columnWhiteList_fullmatch.add("createtab_stmt");
+    columnWhiteList_fullmatch.add("plan");
+    columnWhiteList_fullmatch.add("database");
+    columnWhiteList_fullmatch.add("behaviorkey");
 
     columnBlackList_fullmatch.add("userid");
     columnBlackList_fullmatch.add("user_id");
@@ -206,17 +211,18 @@ public class JDBCInterpreter extends KerberosInterpreter {
     columnBlackList_fullmatch.add("phone_number");
     columnBlackList_fullmatch.add("mobile");
     columnBlackList_fullmatch.add("servnumber");
+    columnBlackList_fullmatch.add("servernum");
     columnBlackList_fullmatch.add("owner");
     columnBlackList_fullmatch.add("author");
     columnBlackList_fullmatch.add("msg");
     columnBlackList_fullmatch.add("message");
-
-    columnBlackList_fullmatch.add("password");
-    columnBlackList_fullmatch.add("passwd");
-    columnBlackList_fullmatch.add("realname");
-    columnBlackList_fullmatch.add("subject");
-    columnBlackList_fullmatch.add("sha256");
-    columnBlackList_fullmatch.add("helper");
+    columnBlackList_fullmatch.add("mac");
+    columnBlackList_fullmatch.add("num"); // mas_t_cy_hecheng_log
+    columnBlackList_fullmatch.add("digest");
+    columnBlackList_fullmatch.add("dir");
+    columnBlackList_fullmatch.add("old");
+    columnBlackList_fullmatch.add("data");
+    columnBlackList_fullmatch.add("cols");
 
     columnBlackList_endmatch.add("id");
     columnBlackList_endmatch.add("nbr");
@@ -225,6 +231,9 @@ public class JDBCInterpreter extends KerberosInterpreter {
     columnBlackList_endmatch.add("_by");
     columnBlackList_endmatch.add("ter");
     columnBlackList_endmatch.add("tor");
+    columnBlackList_endmatch.add("ker");
+    columnBlackList_endmatch.add("per");
+    columnBlackList_endmatch.add("loc");
 
     columnBlackList_partmatch.add("ip");
     columnBlackList_partmatch.add("account");
@@ -253,6 +262,43 @@ public class JDBCInterpreter extends KerberosInterpreter {
     columnBlackList_partmatch.add("coop");
     columnBlackList_partmatch.add("class");
     columnBlackList_partmatch.add("thumbnail");
+    columnBlackList_partmatch.add("password");
+    columnBlackList_partmatch.add("passwd");
+    columnBlackList_partmatch.add("pwd");
+    columnBlackList_partmatch.add("salt");
+    columnBlackList_partmatch.add("para");
+    columnBlackList_partmatch.add("result");
+    columnBlackList_partmatch.add("detail");
+    columnBlackList_partmatch.add("uri");
+    columnBlackList_partmatch.add("body");
+    columnBlackList_partmatch.add("memo");
+    columnBlackList_partmatch.add("path");
+    columnBlackList_partmatch.add("link");
+    columnBlackList_partmatch.add("attr");
+    columnBlackList_partmatch.add("propert");
+    columnBlackList_partmatch.add("cover");
+    columnBlackList_partmatch.add("label");
+    columnBlackList_partmatch.add("desc");
+    columnBlackList_partmatch.add("des");
+    columnBlackList_partmatch.add("model");
+    columnBlackList_partmatch.add("spare");
+    columnBlackList_partmatch.add("json");
+    columnBlackList_partmatch.add("carrier");
+    columnBlackList_partmatch.add("supplier");
+    columnBlackList_partmatch.add("scheme");
+    columnBlackList_partmatch.add("alias");
+    columnBlackList_partmatch.add("password");
+    columnBlackList_partmatch.add("passwd");
+    columnBlackList_partmatch.add("realname");
+    columnBlackList_partmatch.add("subject");
+    columnBlackList_partmatch.add("hash");
+    columnBlackList_partmatch.add("sha256");
+    columnBlackList_partmatch.add("md5");
+    columnBlackList_partmatch.add("helper");
+    columnBlackList_partmatch.add("answer");
+    columnBlackList_partmatch.add("img");
+    columnBlackList_partmatch.add("explain");
+    columnBlackList_partmatch.add("imei");
 
     // 配置
     String conf_path = properties.getProperty("ColumnConfig","");
@@ -286,14 +332,14 @@ public class JDBCInterpreter extends KerberosInterpreter {
       e.printStackTrace();
     }
   }
-  private boolean isColumnAllowDisplay(String columnName) {
+  private Boolean isColumnBlock(String columnName) {
     String col = columnName.toLowerCase().trim();
-    if (columnBlackList_fullmatch.contains(col)) return false; // 黑名单全匹配
-    if (columnWhiteList_fullmatch.contains(col)) return true; // 白名单全匹配 处理误判
-    if (columnBlackList_endmatch.stream().anyMatch(col::endsWith)) return false; // 结尾
-    if (columnBlackList_startmatch.stream().anyMatch(col::startsWith)) return false; // 开头
-    if (columnBlackList_partmatch.stream().anyMatch(col::contains)) return false; // 任意位置
-    return true;
+    if (columnBlackList_fullmatch.contains(col)) return true; // 黑名单全匹配
+    if (columnWhiteList_fullmatch.contains(col)) return false; // 白名单全匹配 处理误判
+    if (columnBlackList_endmatch.stream().anyMatch(col::endsWith)) return true; // 结尾
+    if (columnBlackList_startmatch.stream().anyMatch(col::startsWith)) return true; // 开头
+    if (columnBlackList_partmatch.stream().anyMatch(col::contains)) return true; // 任意位置
+    return null;
   }
 
   @Override
@@ -781,8 +827,8 @@ public class JDBCInterpreter extends KerberosInterpreter {
       msg = new StringBuilder();
     }
 
-    // 脱敏字段列序列表
-    List<Integer> sensitiveColumnIndexList = new ArrayList<>();
+    // 字段脱敏标记
+    List<Boolean> isColumnBlockIndexList = new ArrayList<>();
 
     for (int i = 1; i < md.getColumnCount() + 1; i++) {
       if (i > 1) {
@@ -795,9 +841,7 @@ public class JDBCInterpreter extends KerberosInterpreter {
         msg.append(removeTablePrefix(replaceReservedChars(
                 TableDataUtils.normalizeColumn(md.getColumnName(i)))));
       }
-      if (!isColumnAllowDisplay(md.getColumnName(i))) {
-        sensitiveColumnIndexList.add(i);
-      }
+      isColumnBlockIndexList.add(isColumnBlock(md.getColumnLabel(i)));
     }
     msg.append(NEWLINE);
 
@@ -817,12 +861,25 @@ public class JDBCInterpreter extends KerberosInterpreter {
         } else {
           resultValue = resultSet.getString(i);
         }
-        if (sensitiveColumnIndexList.contains(i)) {
+
+        if (isColumnBlockIndexList.get(i - 1) == null) {
+          if (resultValue.contains("//") || resultValue.contains("{")
+                  || resultValue.contains("|") || resultValue.contains("=")) {
+            // 含特殊字符 最多展示10个字符
+            resultValue =  resultValue.length() >= 10 ? resultValue.substring(0, 10) + "..." : resultValue;
+          } else if (resultValue.length() > 20) {
+            // 长字段 最多展示20个字符
+            resultValue = resultValue.substring(0, 20) + "...";
+          }
+        } else if (isColumnBlockIndexList.get(i - 1)) {
           // resultValue 前8位替换位星号，注意下标越界
-          if (resultValue.length() >= 8) {
-            resultValue = "****" + resultValue.substring(8);
+          if (resultValue.length() < 8) {
+            resultValue = "********";
+          } else if (resultValue.length() <= 20) {
+            resultValue = "********" + resultValue.substring(8);
           } else {
-            resultValue = "****";
+            // 长字段 最多展示20个字符 且脱敏
+            resultValue = "********" + resultValue.substring(8, 20) + "...";
           }
         }
         msg.append(replaceReservedChars(TableDataUtils.normalizeColumn(resultValue)));
