@@ -178,12 +178,19 @@ public class JDBCInterpreter extends KerberosInterpreter {
   private Set<String> columnBlackList_startmatch = new HashSet<>();
   private Set<String> columnBlackList_partmatch = new HashSet<>();
 
+  private boolean sqlLogEnabled;
+  private boolean columnFilterEnabled;
+
   public JDBCInterpreter(Properties property) {
     super(property);
     jdbcUserConfigurationsMap = new HashMap<>();
     basePropertiesMap = new HashMap<>();
     sqlCompletersMap = new HashMap<>();
     maxLineResults = MAX_LINE_DEFAULT;
+    
+    sqlLogEnabled = Boolean.parseBoolean(getProperty("check.sql.enable", "true"));
+    columnFilterEnabled = Boolean.parseBoolean(getProperty("check.column.enable", "true"));
+    
     updateColumnConfig();
   }
 
@@ -816,7 +823,7 @@ public class JDBCInterpreter extends KerberosInterpreter {
     return null;
   }
 
-  private String getResults(ResultSet resultSet, boolean isTableType)
+  private String getResults(ResultSet resultSet, boolean isTableType, InterpreterContext context)
       throws SQLException {
 
     ResultSetMetaData md = resultSet.getMetaData();
@@ -862,24 +869,26 @@ public class JDBCInterpreter extends KerberosInterpreter {
           resultValue = resultSet.getString(i);
         }
 
-        if (isColumnBlockIndexList.get(i - 1) == null) {
-          if (resultValue.contains("//") || resultValue.contains("{")
-                  || resultValue.contains("|") || resultValue.contains("=")) {
-            // 含特殊字符 最多展示10个字符
-            resultValue =  resultValue.length() >= 10 ? resultValue.substring(0, 10) + "..." : resultValue;
-          } else if (resultValue.length() > 20) {
-            // 长字段 最多展示20个字符
-            resultValue = resultValue.substring(0, 20) + "...";
-          }
-        } else if (isColumnBlockIndexList.get(i - 1)) {
-          // resultValue 前8位替换位星号，注意下标越界
-          if (resultValue.length() < 8) {
-            resultValue = "********";
-          } else if (resultValue.length() <= 20) {
-            resultValue = "********" + resultValue.substring(8);
-          } else {
-            // 长字段 最多展示20个字符 且脱敏
-            resultValue = "********" + resultValue.substring(8, 20) + "...";
+        if (isColumnFilterEnabled(context)) {
+          if (isColumnBlockIndexList.get(i - 1) == null) {
+            if (resultValue.contains("//") || resultValue.contains("{")
+                    || resultValue.contains("|") || resultValue.contains("=")) {
+              // 含特殊字符 最多展示10个字符
+              resultValue =  resultValue.length() >= 10 ? resultValue.substring(0, 10) + "..." : resultValue;
+            } else if (resultValue.length() > 20) {
+              // 长字段 最多展示20个字符
+              resultValue = resultValue.substring(0, 20) + "...";
+            }
+          } else if (isColumnBlockIndexList.get(i - 1)) {
+            // resultValue 前8位替换位星号，注意下标越界
+            if (resultValue.length() < 8) {
+              resultValue = "********";
+            } else if (resultValue.length() <= 20) {
+              resultValue = "********" + resultValue.substring(8);
+            } else {
+              // 长字段 最多展示20个字符 且脱敏
+              resultValue = "********" + resultValue.substring(8, 20) + "...";
+            }
           }
         }
         msg.append(replaceReservedChars(TableDataUtils.normalizeColumn(resultValue)));
@@ -998,8 +1007,10 @@ public class JDBCInterpreter extends KerberosInterpreter {
           // some version of hive doesn't work with set statement with empty line ahead.
           // so we need to trim it first in this case.
           sqlToExecute = sqlToExecute.trim();
+           }
+        if (isSqlLogEnabled(context)) {
+          LOGGER.info("[{}|{}|{}] Execute sql: {}", user, noteId, paragraphId, sqlToExecute);
         }
-        LOGGER.info("[{}|{}|{}] Execute sql: {}", user, noteId, paragraphId, sqlToExecute);
         statement = connection.createStatement();
 
         // fetch n+1 rows in order to indicate there's more rows available (for large selects)
@@ -1055,7 +1066,7 @@ public class JDBCInterpreter extends KerberosInterpreter {
 
               } else {
                 String results = getResults(resultSet,
-                        !containsIgnoreCase(sqlToExecute, EXPLAIN_PREDICATE));
+                        !containsIgnoreCase(sqlToExecute, EXPLAIN_PREDICATE), context);
                 context.out.write(results);
                 context.out.write("\n%text ");
                 context.out.flush();
@@ -1320,5 +1331,29 @@ public class JDBCInterpreter extends KerberosInterpreter {
               getProperty(CONCURRENT_EXECUTION_COUNT));
       return 10;
     }
+  }
+
+  boolean isSqlLogEnabled(InterpreterContext context) {
+    String props = context.getLocalProperties().get("check");
+    if (null != props) {
+      try {
+        return Boolean.parseBoolean(props);
+      } catch (Exception e) {
+
+      }
+    }
+    return sqlLogEnabled;
+  }
+
+  boolean isColumnFilterEnabled(InterpreterContext context) {
+    String props = context.getLocalProperties().get("check");
+    if (null != props) {
+      try {
+        return Boolean.parseBoolean(props);
+      } catch (Exception e) {
+
+      }
+    }
+    return columnFilterEnabled;
   }
 }
