@@ -210,6 +210,8 @@ public class JDBCInterpreter extends KerberosInterpreter {
     columnWhiteList_fullmatch.add("plan");
     columnWhiteList_fullmatch.add("database");
     columnWhiteList_fullmatch.add("behaviorkey");
+    columnWhiteList_fullmatch.add("data_type");
+    columnWhiteList_fullmatch.add("partition");
 
     columnBlackList_fullmatch.add("userid");
     columnBlackList_fullmatch.add("user_id");
